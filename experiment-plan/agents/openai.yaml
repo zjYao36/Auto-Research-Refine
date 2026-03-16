@@ -1,0 +1,5 @@
+---
+interface:
+  display_name: "Experiment Plan"
+  short_description: "Turn a proposal into a claim-driven experiment roadmap"
+  default_prompt: "Use $experiment-plan to turn this refined research proposal into a detailed, claim-driven experiment plan with main tables, ablations, run order, compute budget, and success criteria: [proposal or FINAL_PROPOSAL.md]."

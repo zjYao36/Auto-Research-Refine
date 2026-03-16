@@ -1,0 +1,5 @@
+---
+interface:
+  display_name: "Research Refine Pipeline"
+  short_description: "Chain method refinement and experiment planning"
+  default_prompt: "Use $research-refine-pipeline to turn this research problem and rough approach into a focused final proposal plus a detailed experiment roadmap in one end-to-end workflow: [problem + initial approach + constraints]."

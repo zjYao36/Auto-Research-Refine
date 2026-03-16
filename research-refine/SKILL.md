@@ -1,36 +1,48 @@
 ---
 name: research-refine
-description: "Iteratively refine research problem decomposition and method via Claude + GPT-5.4 peer review loop. Use when user says \"refine my approach\", \"帮我细化方案\", \"decompose this problem\", \"打磨idea\", \"refine research plan\", \"细化研究方案\", or wants to turn a vague research idea into a concrete, top-venue-ready plan."
+description: 'Turn a vague research direction into a problem-anchored, elegant, frontier-aware, implementation-oriented method plan via iterative GPT-5.4 review. Use when the user says "refine my approach", "帮我细化方案", "decompose this problem", "打磨idea", "refine research plan", "细化研究方案", or wants a concrete research method that stays simple, focused, and top-venue ready instead of a vague or overbuilt idea.'
 allowed-tools: Bash(*), Read, Write, Edit, Grep, Glob, WebSearch, WebFetch, Agent, mcp__codex__codex, mcp__codex__codex-reply
 ---
 
-# Research Refine: Iterative Problem Decomposition & Method Concretization
+# Research Refine: Problem-Anchored, Elegant, Frontier-Aware Plan Refinement
 
 Refine and concretize: **$ARGUMENTS**
 
 ## Overview
 
-Given a research PROBLEM and a vague APPROACH, iteratively refine the problem decomposition and method into a concrete, top-venue-ready plan through a Claude + GPT-5.4 peer review loop. This skill fills the gap between "I have a vague idea" and "let me implement it."
+Use this skill when the research problem is already visible but the technical route is still fuzzy. The goal is not to produce a bloated proposal or a benchmark shopping list. The goal is to turn a vague direction into a **problem -> focused method -> minimal validation** document that is concrete enough to implement, elegant enough to feel paper-worthy, and current enough to resonate in the foundation-model era.
+
+Four principles dominate this skill:
+
+1. **Do not lose the original problem.** Freeze an immutable **Problem Anchor** and reuse it in every round.
+2. **The smallest adequate mechanism wins.** Prefer the minimal intervention that directly fixes the bottleneck.
+3. **One paper, one dominant contribution.** Prefer one sharp thesis plus at most one supporting contribution.
+4. **Modern leverage is a prior, not a decoration.** When LLM / VLM / Diffusion / RL / distillation / inference-time scaling naturally fit the bottleneck, use them concretely. Do not bolt them on as buzzwords.
 
 ```
 User input (PROBLEM + vague APPROACH)
-  → Phase 1 (Claude): Scan local papers → Decompose problem → Concretize method → Write initial proposal
-  → Phase 2 (Codex/GPT-5.4): 6-dimension peer review + scoring (1-10)
-  → Phase 3 (Claude): Parse feedback → Revise proposal → Track changes
-  → Phase 4 (Codex, same thread): Re-evaluate revised proposal
-  → Repeat Phase 3-4 until OVERALL SCORE >= 7 or MAX_ROUNDS (5) reached
-  → Phase 5: Save all iteration history to refine-logs/
+  -> Phase 0 (Claude): Freeze Problem Anchor
+  -> Phase 1 (Claude): Scan grounding papers -> identify technical gap -> choose the sharpest route -> write focused proposal
+  -> Phase 2 (Codex/GPT-5.4): Review for fidelity, specificity, contribution quality, and frontier leverage
+  -> Phase 3 (Claude): Anchor check + simplicity check -> revise method -> rewrite full proposal
+  -> Phase 4 (Codex, same thread): Re-evaluate revised proposal
+  -> Repeat Phase 3-4 until OVERALL SCORE >= 9 or MAX_ROUNDS reached
+  -> Phase 5: Save full history to refine-logs/
+  -> Optional handoff: /experiment-plan for a detailed execution-ready experiment roadmap
 ```
 
 ## Constants
 
-- **REVIEWER_MODEL = `gpt-5.4`** — Model used via Codex MCP for peer review. Must be an OpenAI model (e.g., `gpt-5.4`, `o3`, `gpt-4o`).
-- **MAX_ROUNDS = 5** — Maximum number of review-revise rounds before forced termination.
-- **SCORE_THRESHOLD = 7** — Minimum overall score to stop iterating. A plan rated 6/10 isn't worth implementing.
-- **OUTPUT_DIR = `refine-logs/`** — Directory for per-round files and final report.
-- **MAX_LOCAL_PAPERS = 15** — Maximum number of local papers to scan for grounding.
+- **REVIEWER_MODEL = `gpt-5.4`** — Reviewer model used via Codex MCP.
+- **MAX_ROUNDS = 5** — Maximum review-revise rounds.
+- **SCORE_THRESHOLD = 9** — Minimum overall score to stop.
+- **OUTPUT_DIR = `refine-logs/`** — Directory for round files and final report.
+- **MAX_LOCAL_PAPERS = 15** — Maximum local papers/notes to scan for grounding.
+- **MAX_CORE_EXPERIMENTS = 3** — Default cap for core validation blocks inside this skill.
+- **MAX_PRIMARY_CLAIMS = 2** — Soft cap for paper-level claims. Prefer one dominant claim plus one supporting claim.
+- **MAX_NEW_TRAINABLE_COMPONENTS = 2** — Soft cap for genuinely new trainable pieces. Exceed only if the paper breaks otherwise.
 
-> 💡 Override via argument, e.g., `/research-refine "problem | approach" — max rounds: 3, threshold: 8`.
+> Override via argument if needed, e.g. `/research-refine "problem | approach" -- max rounds: 3, threshold: 9`.
 
 ## Output Structure
 
@@ -42,111 +54,205 @@ refine-logs/
 ├── round-2-review.md
 ├── round-2-refinement.md
 ├── ...
-├── REFINEMENT_REPORT.md        (final summary + all raw responses)
-└── score-history.md            (score evolution table)
+├── REVIEW_SUMMARY.md
+├── FINAL_PROPOSAL.md
+├── REFINEMENT_REPORT.md
+└── score-history.md
 ```
+
+Every `round-N-refinement.md` must contain a **full anchored proposal**, not just incremental fixes.
 
 ## Workflow
 
-### Phase 1: Problem Decomposition & Initial Proposal
+### Phase 0: Freeze the Problem Anchor
 
-Build a grounded, concrete initial proposal from the user's vague input.
+Before proposing anything, extract the user's immutable bottom-line problem. This anchor must be copied verbatim into every proposal and every refinement round.
 
-#### Step 1.1: Scan Local Paper Library
+Write:
 
-Check `papers/` and `literature/` in the project directory for existing PDFs and notes. Read first 3 pages of relevant papers (up to MAX_LOCAL_PAPERS) to build a baseline understanding.
+- **Bottom-line problem**: What technical problem must be solved?
+- **Must-solve bottleneck**: What specific weakness in current methods is unacceptable?
+- **Non-goals**: What is explicitly *not* the goal of this project?
+- **Constraints**: Compute, data, time, tooling, venue, deployment limits.
+- **Success condition**: What evidence would make the user say "yes, this method addresses the actual problem"?
 
-- Identify relevant methods, baselines, evaluation protocols
-- Note recurring experimental setups and metrics in the area
-- Extract key assumptions and limitations from related work
-- Build a list of "grounding references" to cite in the proposal
+If later reviewer feedback would change the problem being solved, mark that as **drift** and push back or adapt carefully.
 
-Also search online if local papers are insufficient:
-- Use WebSearch for recent arXiv preprints and top venue papers
-- Focus on methodological details (not just abstracts)
+### Phase 1: Build the Initial Proposal
 
-#### Step 1.2: Decompose the Problem
+#### Step 1.1: Scan Grounding Material
 
-Break the user's problem into concrete sub-problems:
+Check `papers/` and `literature/` first. Read only the relevant parts needed to answer:
 
-1. **Core research question**: What exactly are we trying to answer?
-2. **Sub-questions**: What smaller questions must be answered first?
-3. **Assumptions**: What must be true for this approach to work?
-4. **Key technical challenges**: What are the hardest parts?
-5. **Evaluation criteria**: How will we know if the method works?
+- What mechanism do current methods use?
+- Where exactly do they fail for this problem?
+- Which recent LLM / VLM / Diffusion / RL era techniques are actually relevant here?
+- What training objectives, representations, or interfaces are reusable?
+- What details distinguish a real method from a renamed high-level idea?
 
-#### Step 1.3: Concretize the Method
+If local material is insufficient, search recent top-venue/arXiv work online. Focus on **method sections, training setup, and failure modes**, not just abstracts.
 
-Transform the vague approach into a specific method:
+#### Step 1.2: Identify the Technical Gap
 
-1. **Algorithm / pipeline**: Step-by-step description of the proposed method
-2. **Key design choices**: Why this architecture / loss / training procedure?
-3. **Baselines**: What are we comparing against? (minimum 2-3 strong baselines)
-4. **Datasets**: Which datasets, what splits, what preprocessing?
-5. **Metrics**: Primary and secondary evaluation metrics
-6. **Ablations**: What components to ablate to prove each design choice matters?
-7. **Expected results**: What do we expect to see, and why?
+Do not stop at generic research questions. Make the gap operational:
 
-#### Step 1.4: Write Initial Proposal
+1. **Current pipeline failure point**: where does the baseline break?
+2. **Why naive fixes are insufficient**: larger context, more data, prompting, memory bank, or stacking more modules.
+3. **Smallest adequate intervention**: what is the least additional mechanism that could plausibly fix the bottleneck?
+4. **Frontier-native alternative**: is there a more current route using foundation-model-era primitives that better matches the bottleneck?
+5. **Core technical claim**: what exact mechanism claim could survive top-venue scrutiny?
+6. **Required evidence**: what minimum proof is needed to defend that claim?
 
-Compile everything into a structured proposal document:
+#### Step 1.3: Choose the Sharpest Route
+
+Before locking the method, compare two candidate routes if both are plausible:
+
+- **Route A: Elegant minimal route** — the smallest mechanism that directly targets the bottleneck.
+- **Route B: Frontier-native route** — a more modern route that uses LLM / VLM / Diffusion / RL / distillation / inference-time scaling *only if* it gives a cleaner or stronger story.
+
+Then decide:
+
+- Which route is more likely to become a strong paper under the stated constraints?
+- Which route has the cleaner novelty story relative to the closest work?
+- Which route avoids contribution sprawl?
+
+If both routes are weak, rethink the framing instead of combining them into a larger system by default.
+
+#### Step 1.4: Concretize the Method First
+
+The proposal must answer "how would we actually build this?" Prefer method detail over broad experimentation and prefer reuse over invention.
+
+Cover:
+
+1. **One-sentence method thesis**: the single strongest mechanism claim.
+2. **Contribution focus**: one dominant contribution and at most one supporting contribution.
+3. **Complexity budget**: what is frozen or reused, what is new, and what tempting additions are intentionally excluded.
+4. **System graph**: modules, data flow, inputs, outputs.
+5. **Representation design**: what latent, embedding, plan token, reward signal, memory state, or alignment space is used?
+6. **Training recipe**: data source, supervision, pseudo-labeling, negatives, curriculum, losses, weighting, stagewise vs joint training.
+7. **Inference path**: how the trained components are used at test time and what signals flow where.
+8. **Why the mechanism stays small**: why a larger stack is unnecessary.
+9. **Exact role of any frontier primitive**: if you use an LLM / VLM / Diffusion / RL component, specify whether it acts as planner, teacher, critic, reward model, generator prior, search controller, or distillation source.
+10. **Failure handling**: what could go wrong and what fallback or diagnostic exists?
+11. **Novelty and elegance argument**: why this is more than naming a module and why the paper still looks focused.
+
+If the method is still only described as "add a module" or "use a planner," it is not concrete enough.
+
+#### Step 1.5: Design Minimal Claim-Driven Validation
+
+Experiments exist to validate the method, not to dominate the document.
+
+For each core claim, define the **smallest strong experiment** that can validate it:
+
+- the claim being tested
+- the necessary baseline or ablation
+- the decisive metric
+- the expected directional outcome
+
+Additional rules:
+
+- Ensure one experiment block directly supports the **Problem Anchor**.
+- If complexity risk exists, include one **simplification or deletion check**.
+- If a frontier primitive is central, include one **necessity check** showing why that choice matters.
+- Default to **1-3 core experiment blocks** and leave the full execution roadmap to `/experiment-plan`.
+
+#### Step 1.6: Write the Initial Proposal
+
+Save to `refine-logs/round-0-initial-proposal.md`.
+
+Use this structure:
 
 ```markdown
 # Research Proposal: [Title]
 
-## Problem Statement
-[Clear, specific problem definition]
+## Problem Anchor
+- Bottom-line problem:
+- Must-solve bottleneck:
+- Non-goals:
+- Constraints:
+- Success condition:
 
-## Research Questions
-1. [Primary RQ]
-2. [Sub-RQ 1]
-3. [Sub-RQ 2]
+## Technical Gap
+[Why current methods fail, why naive bigger systems are not enough, and what mechanism is missing]
+
+## Method Thesis
+- One-sentence thesis:
+- Why this is the smallest adequate intervention:
+- Why this route is timely in the foundation-model era:
+
+## Contribution Focus
+- Dominant contribution:
+- Optional supporting contribution:
+- Explicit non-contributions:
 
 ## Proposed Method
-### Overview
-[1-paragraph summary]
+### Complexity Budget
+- Frozen / reused backbone:
+- New trainable components:
+- Tempting additions intentionally not used:
 
-### Detailed Method
-[Step-by-step algorithm/pipeline description]
+### System Overview
+[Step-by-step pipeline or ASCII graph]
 
-### Key Design Choices
-[Justified decisions with references to local papers]
+### Core Mechanism
+- Input / output:
+- Architecture or policy:
+- Training signal / loss:
+- Why this is the main novelty:
 
-## Experimental Design
-### Baselines
-- [Baseline 1]: [why it's relevant]
-- [Baseline 2]: [why it's relevant]
-- [Baseline 3]: [why it's relevant]
+### Optional Supporting Component
+- Only include if truly necessary:
+- Input / output:
+- Training signal / loss:
+- Why it does not create contribution sprawl:
 
-### Datasets
-- [Dataset 1]: [size, split, preprocessing]
-- [Dataset 2]: [size, split, preprocessing]
+### Modern Primitive Usage
+- Which LLM / VLM / Diffusion / RL-era primitive is used:
+- Exact role in the pipeline:
+- Why it is more natural than an old-school alternative:
 
-### Evaluation Metrics
-- Primary: [metric + justification]
-- Secondary: [metrics]
+### Integration into Base Generator / Downstream Pipeline
+[Where the new method attaches, what is frozen, what is trainable, inference order]
 
-### Ablation Studies
-1. [Component 1]: remove/replace to test [hypothesis]
-2. [Component 2]: remove/replace to test [hypothesis]
+### Training Plan
+[Stagewise or joint training, losses, data construction, pseudo-labels, schedules]
 
-## Expected Results
-[What we expect and why — be specific about magnitudes]
+### Failure Modes and Diagnostics
+- [Failure mode]:
+- [How to detect]:
+- [Fallback or mitigation]:
 
-## Assumptions & Risks
-- [Assumption 1]: [what happens if wrong]
-- [Risk 1]: [mitigation strategy]
+### Novelty and Elegance Argument
+[Closest work, exact difference, why this is a focused mechanism-level contribution rather than a module pile-up]
+
+## Claim-Driven Validation Sketch
+### Claim 1: [Main claim]
+- Minimal experiment:
+- Baselines / ablations:
+- Metric:
+- Expected evidence:
+
+### Claim 2: [Optional]
+- Minimal experiment:
+- Baselines / ablations:
+- Metric:
+- Expected evidence:
+
+## Experiment Handoff Inputs
+- Must-prove claims:
+- Must-run ablations:
+- Critical datasets / metrics:
+- Highest-risk assumptions:
 
 ## Compute & Timeline Estimate
-- Estimated GPU-hours: [X]
-- Timeline: [X days/weeks]
+- Estimated GPU-hours:
+- Data / annotation cost:
+- Timeline:
 ```
 
-Save this proposal to `refine-logs/round-0-initial-proposal.md`.
+### Phase 2: External Method Review (Round 1)
 
-### Phase 2: External Peer Review (Round 1)
-
-Send the full proposal to GPT-5.4 for a rigorous 6-dimension review:
+Send the full proposal to GPT-5.4 for an **elegance-first, frontier-aware, method-first** review. The reviewer should spend most of the critique budget on the method itself, not on expanding the experiment menu.
 
 ```
 mcp__codex__codex:
@@ -154,108 +260,174 @@ mcp__codex__codex:
   config: {"model_reasoning_effort": "xhigh"}
   prompt: |
     You are a senior ML reviewer for a top venue (NeurIPS/ICML/ICLR).
-    Below is a research proposal. Please provide a rigorous peer review.
+    This is an early-stage, method-first research proposal.
+
+    Your job is NOT to reward extra modules, contribution sprawl, or a giant benchmark checklist.
+    Your job IS to stress-test whether the proposed method:
+    (1) still solves the original anchored problem,
+    (2) is concrete enough to implement,
+    (3) presents a focused, elegant contribution,
+    (4) uses foundation-model-era techniques appropriately when they are the natural fit.
+
+    Review principles:
+    - Prefer the smallest adequate mechanism over a larger system.
+    - Penalize parallel contributions that make the paper feel unfocused.
+    - If a modern LLM / VLM / Diffusion / RL route would clearly produce a better paper, say so concretely.
+    - If the proposal is already modern enough, do NOT force trendy components.
+    - Do not ask for extra experiments unless they are needed to prove the core claims.
+
+    Read the Problem Anchor first. If your suggested fix would change the problem being solved,
+    call that out explicitly as drift instead of treating it as a normal revision request.
 
     === PROPOSAL ===
     [Paste the FULL proposal from Phase 1]
     === END PROPOSAL ===
 
-    Score each dimension 1-10 and provide specific, actionable feedback:
+    Score these 7 dimensions from 1-10:
 
-    1. **Clarity** (1-10): Is the problem well-defined? Is the method description precise enough to reproduce? Are the research questions specific and answerable?
+    1. **Problem Fidelity**: Does the method still attack the original bottleneck, or has it drifted into solving something easier or different?
 
-    2. **Novelty** (1-10): Does this propose something genuinely new, or is it incremental? How does it differentiate from the closest existing work? Would a reviewer say "so what?"
+    2. **Method Specificity**: Are the interfaces, representations, losses, training stages, and inference path concrete enough that an engineer could start implementing?
 
-    3. **Feasibility** (1-10): Can this actually be implemented and run with reasonable resources? Are the compute estimates realistic? Are the datasets accessible?
+    3. **Contribution Quality**: Is there one dominant mechanism-level contribution with real novelty, good parsimony, and no obvious contribution sprawl?
 
-    4. **Experimental Design** (1-10): Are the baselines strong and fair? Are the metrics appropriate? Are the ablations sufficient to isolate contributions? Is the evaluation rigorous?
+    4. **Frontier Leverage**: Does the proposal use current foundation-model-era primitives appropriately when they are the right tool, instead of defaulting to old-school module stacking?
 
-    5. **Venue Fit** (1-10): Would this be competitive at a top venue? Is the contribution substantial enough? Does the framing match what reviewers expect?
+    5. **Feasibility**: Can this method be trained and integrated with the stated resources and data assumptions?
 
-    6. **Completeness** (1-10): Are there missing baselines, datasets, or analyses? Are there obvious experiments that should be included? Any gaps in the logical chain?
+    6. **Validation Focus**: Are the proposed experiments minimal but sufficient to validate the core claims? Is there unnecessary experimental bloat?
 
-    **OVERALL SCORE** (1-10): Weighted average reflecting your holistic assessment.
+    7. **Venue Readiness**: If executed well, would the contribution feel sharp and timely enough for a top venue?
+
+    **OVERALL SCORE** (1-10): Weighted toward Problem Fidelity, Method Specificity, Contribution Quality, and Frontier Leverage.
+    Use this weighting: Problem Fidelity 15%, Method Specificity 25%, Contribution Quality 25%, Frontier Leverage 15%, Feasibility 10%, Validation Focus 5%, Venue Readiness 5%.
 
     For each dimension scoring < 7, provide:
     - The specific weakness
-    - A concrete, actionable suggestion to fix it
-    - Priority: CRITICAL (must fix) / IMPORTANT (should fix) / MINOR (nice to fix)
+    - A concrete fix at the method level (interface / loss / training recipe / integration point / deletion of unnecessary parts)
+    - Priority: CRITICAL / IMPORTANT / MINOR
 
-    Finally, give a VERDICT: READY (score >= 7, plan is implementable) / REVISE (specific fixes needed) / RETHINK (fundamental issues with approach)
+    Then add:
+    - **Simplification Opportunities**: 1-3 concrete ways to delete, merge, or reuse components while preserving the main claim. Write "NONE" if already tight.
+    - **Modernization Opportunities**: 1-3 concrete ways to replace old-school pieces with more natural foundation-model-era primitives if genuinely better. Write "NONE" if already modern enough.
+    - **Drift Warning**: "NONE" if the proposal still solves the anchored problem; otherwise explain the drift clearly.
+    - **Verdict**: READY / REVISE / RETHINK
+
+    Verdict rule:
+    - READY: overall score >= 9, no meaningful drift, one focused dominant contribution, and no obvious complexity bloat remains
+    - REVISE: the direction is promising but not yet at READY bar
+    - RETHINK: the core mechanism or framing is still fundamentally off
 ```
 
-**CRITICAL: Save the threadId** from this call for all subsequent rounds.
+**CRITICAL: Save the `threadId`** from this call for all later rounds.
 
-**CRITICAL: Save the FULL raw response** verbatim — do NOT discard or summarize.
+**CRITICAL: Save the FULL raw response** verbatim.
 
-Save the review to `refine-logs/round-1-review.md` with the raw response in a `<details>` block.
+Save review to `refine-logs/round-1-review.md` with the raw response in a `<details>` block.
 
-### Phase 3: Parse Feedback & Revise Proposal
+### Phase 3: Parse Feedback and Revise the Method
 
-#### Step 3.1: Parse Review
+#### Step 3.1: Parse the Review
 
-Extract structured fields from the reviewer's response:
+Extract:
 
-- **Per-dimension scores**: Clarity, Novelty, Feasibility, Exp Design, Venue Fit, Completeness
-- **Overall score** (1-10)
-- **Verdict**: READY / REVISE / RETHINK
-- **Action items**: Ranked list with priority (CRITICAL / IMPORTANT / MINOR)
+- **Problem Fidelity**
+- **Method Specificity**
+- **Contribution Quality**
+- **Frontier Leverage**
+- **Feasibility**
+- **Validation Focus**
+- **Venue Readiness**
+- **Overall score**
+- **Verdict**
+- **Drift Warning**
+- **Simplification Opportunities**
+- **Modernization Opportunities**
+- **Action items** ranked by priority
 
 Update `refine-logs/score-history.md`:
 
 ```markdown
 # Score Evolution
 
-| Round | Clarity | Novelty | Feasibility | Exp Design | Venue Fit | Completeness | Overall | Verdict |
-|-------|---------|---------|-------------|------------|-----------|--------------|---------|---------|
-| 1     | X       | X       | X           | X          | X         | X            | X       | REVISE  |
+| Round | Problem Fidelity | Method Specificity | Contribution Quality | Frontier Leverage | Feasibility | Validation Focus | Venue Readiness | Overall | Verdict |
+|-------|------------------|--------------------|----------------------|-------------------|-------------|------------------|-----------------|---------|---------|
+| 1     | X                | X                  | X                    | X                 | X           | X                | X               | X       | REVISE  |
 ```
 
-**STOP CONDITION**: If overall score >= SCORE_THRESHOLD AND verdict is READY → skip to Phase 5.
+**STOP CONDITION**: If overall score >= SCORE_THRESHOLD, verdict is READY, and there is no unresolved drift warning, skip to Phase 5.
 
-#### Step 3.2: Revise Proposal (with Pushback)
+#### Step 3.2: Revise With an Anchor Check and a Simplicity Check
 
-For each action item (CRITICAL first, then IMPORTANT, then MINOR):
+Before changing anything:
 
-1. **Assess the feedback**: Does this criticism hold up against the local papers you've read?
-   - If **valid**: Implement the suggested fix in the proposal
-   - If **debatable**: Revise the proposal but add a "Rebuttal" note explaining your reasoning, citing specific local papers as evidence. The reviewer may not have access to all relevant work.
-   - If **wrong**: Do NOT blindly comply. Add a "Pushback" note with evidence from local papers. This makes the loop more robust than blindly accepting all feedback.
+1. Copy the **Problem Anchor verbatim**.
+2. Write an **Anchor Check**:
+   - What is the original bottleneck?
+   - Does the current method still solve it?
+   - Which reviewer suggestions would cause drift if followed blindly?
+3. Write a **Simplicity Check**:
+   - What is the dominant contribution now?
+   - What components can be removed, merged, or kept frozen?
+   - Which reviewer suggestions add unnecessary complexity?
+   - If a frontier primitive is central, is its role still crisp and justified?
 
-2. **Track all changes**: For each revision, note:
-   - What was changed
-   - Why (reviewer feedback + your reasoning)
-   - What evidence supports the change (or pushback)
+Then process reviewer feedback:
 
-3. **Rewrite the full proposal**: Produce a complete updated proposal (not a diff — GPT needs the full text in context).
+- If **valid**: sharpen the mechanism, simplify if possible, or modernize if the paper really improves.
+- If **debatable**: revise, but explain your reasoning with evidence.
+- If **wrong, drifting, or over-complicating**: push back with evidence from local papers and the Problem Anchor.
+
+Bias the revisions toward:
+
+- a sharper central contribution
+- fewer moving parts
+- cleaner reuse of strong existing backbones
+- more natural foundation-model-era leverage when it improves the paper
+- leaner, claim-driven experiments
+
+Do **not** add multiple parallel contributions just to chase score. If the reviewer requests another module, first ask whether the same gain can come from a better interface, distillation signal, reward model, or inference policy on top of an existing backbone.
 
 Save to `refine-logs/round-N-refinement.md`:
 
 ```markdown
 # Round N Refinement
 
+## Problem Anchor
+[Copy verbatim from round 0]
+
+## Anchor Check
+- Original bottleneck:
+- Why the revised method still addresses it:
+- Reviewer suggestions rejected as drift:
+
+## Simplicity Check
+- Dominant contribution after revision:
+- Components removed or merged:
+- Reviewer suggestions rejected as unnecessary complexity:
+- Why the remaining mechanism is still the smallest adequate route:
+
 ## Changes Made
 
-### 1. [Section changed]
-- **Reviewer said**: [quote]
-- **Action**: [what was changed]
-- **Reasoning**: [why, with evidence]
+### 1. [Method section changed]
+- Reviewer said:
+- Action:
+- Reasoning:
+- Impact on core method:
 
-### 2. [Section changed]
-- **Reviewer said**: [quote]
-- **Action**: [pushback — kept original with justification]
-- **Evidence**: [citation from local papers]
-
-...
+### 2. [Novelty / modernity / feasibility / validation change]
+- Reviewer said:
+- Action:
+- Reasoning:
+- Impact on core method:
 
 ## Revised Proposal
-
-[Full updated proposal text]
+[Full updated proposal from Problem Anchor through Claim-Driven Validation Sketch]
 ```
 
 ### Phase 4: Re-evaluation (Round 2+)
 
-Send the revised proposal back to GPT-5.4 using the **same thread** for continuity:
+Send the revised proposal back to GPT-5.4 in the **same thread**:
 
 ```
 mcp__codex__codex-reply:
@@ -265,35 +437,92 @@ mcp__codex__codex-reply:
   prompt: |
     [Round N re-evaluation]
 
-    I have revised the proposal based on your feedback. Here are the key changes:
+    I revised the proposal based on your feedback.
+    First, check whether the original Problem Anchor is still preserved.
+    Second, judge whether the method is now more concrete, more focused, and more current.
 
-    1. [Change 1]: [brief description + reasoning]
-    2. [Change 2]: [brief description + reasoning]
-    3. [Pushback on point X]: [your evidence for disagreeing]
+    Key changes:
+    1. [Method change 1]
+    2. [Method change 2]
+    3. [Simplification / modernization / pushback if any]
 
     === REVISED PROPOSAL ===
-    [Paste the FULL revised proposal — you cannot read files]
+    [Paste the FULL revised proposal]
     === END REVISED PROPOSAL ===
 
-    Please re-score all 6 dimensions and overall. For each dimension:
-    - Has the score improved, stayed the same, or decreased?
-    - If the author pushed back on your feedback, do you accept their reasoning?
-    - Are there NEW issues introduced by the revisions?
+    Please:
+    - Re-score the same 7 dimensions and overall
+    - State whether the Problem Anchor is preserved or drifted
+    - State whether the dominant contribution is now sharper or still too broad
+    - State whether the method is simpler or still overbuilt
+    - State whether the frontier leverage is now appropriate or still old-school / forced
+    - Focus new critiques on missing mechanism, weak training signal, weak integration point, pseudo-novelty, or unnecessary complexity
+    - Use the same verdict rule: READY only if overall score >= 9 and no blocking issue remains
 
-    Same format: 6 dimension scores, overall score, verdict, remaining action items with priorities.
+    Same output format: 7 scores, overall score, verdict, drift warning, simplification opportunities, modernization opportunities, remaining action items.
 ```
 
 Save review to `refine-logs/round-N-review.md`.
 
-**Then return to Phase 3** (parse → revise → re-evaluate) until:
-- **Overall score >= SCORE_THRESHOLD** AND verdict is READY → proceed to Phase 5
-- **MAX_ROUNDS reached** → proceed to Phase 5 with current state
+Then return to Phase 3 until:
 
-### Phase 5: Final Report & Logs
+- **Overall score >= SCORE_THRESHOLD** and verdict is READY and no unresolved drift
+- or **MAX_ROUNDS reached**
 
-#### Step 5.1: Write REFINEMENT_REPORT.md
+### Phase 5: Final Report and Logs
 
-Save to `refine-logs/REFINEMENT_REPORT.md`:
+#### Step 5.1: Write `refine-logs/REVIEW_SUMMARY.md`
+
+This file is the high-level round-by-round review record. It should answer: each round was trying to solve what, what changed, what got resolved, and what remained.
+
+```markdown
+# Review Summary
+
+**Problem**: [user's problem]
+**Initial Approach**: [user's vague approach]
+**Date**: [today]
+**Rounds**: N / MAX_ROUNDS
+**Final Score**: X / 10
+**Final Verdict**: [READY / REVISE / RETHINK]
+
+## Problem Anchor
+[Verbatim anchor used across all rounds]
+
+## Round-by-Round Resolution Log
+
+| Round | Main Reviewer Concerns | What This Round Simplified / Modernized | Solved? | Remaining Risk |
+|-------|-------------------------|------------------------------------------|---------|----------------|
+| 1     | [top issues from review] | [main method changes]                    | [yes / partial / no] | [if any] |
+| 2     | ...                     | ...                                      | ...     | ...            |
+
+## Overall Evolution
+- [How the method became more concrete]
+- [How the dominant contribution became more focused]
+- [How unnecessary complexity was removed]
+- [How modern technical leverage improved or stayed intentionally minimal]
+- [How drift was avoided or corrected]
+
+## Final Status
+- Anchor status: [preserved / corrected / unresolved]
+- Focus status: [tight / slightly broad / still diffuse]
+- Modernity status: [appropriately frontier-aware / intentionally conservative / still old-school]
+- Strongest parts of final method:
+- Remaining weaknesses:
+```
+
+#### Step 5.2: Write `refine-logs/FINAL_PROPOSAL.md`
+
+This file is the clean final version document. It should contain only the final proposal itself, without review chatter, round history, or raw reviewer output.
+
+```markdown
+# Research Proposal: [Title]
+
+[Paste the final refined proposal only]
+```
+
+If the final verdict is not READY, still write the best current final version here.
+
+#### Step 5.3: Write `refine-logs/REFINEMENT_REPORT.md`
 
 ```markdown
 # Refinement Report
@@ -305,34 +534,42 @@ Save to `refine-logs/REFINEMENT_REPORT.md`:
 **Final Score**: X / 10
 **Final Verdict**: [READY / REVISE / RETHINK]
 
+## Problem Anchor
+[Verbatim anchor used across all rounds]
+
+## Output Files
+- Review summary: `refine-logs/REVIEW_SUMMARY.md`
+- Final proposal: `refine-logs/FINAL_PROPOSAL.md`
+
 ## Score Evolution
 
-| Round | Clarity | Novelty | Feasibility | Exp Design | Venue Fit | Completeness | Overall | Verdict |
-|-------|---------|---------|-------------|------------|-----------|--------------|---------|---------|
-| 1     | ...     | ...     | ...         | ...        | ...       | ...          | ...     | ...     |
-| 2     | ...     | ...     | ...         | ...        | ...       | ...          | ...     | ...     |
-| ...   | ...     | ...     | ...         | ...        | ...       | ...          | ...     | ...     |
+| Round | Problem Fidelity | Method Specificity | Contribution Quality | Frontier Leverage | Feasibility | Validation Focus | Venue Readiness | Overall | Verdict |
+|-------|------------------|--------------------|----------------------|-------------------|-------------|------------------|-----------------|---------|---------|
+| 1     | ...              | ...                | ...                  | ...               | ...         | ...              | ...             | ...     | ...     |
 
-## Final Proposal
+## Round-by-Round Review Record
 
-[Full text of the final refined proposal]
+| Round | Main Reviewer Concerns | What Was Changed | Result |
+|-------|-------------------------|------------------|--------|
+| 1     | [top issues]            | [main fixes]     | [resolved / partial / unresolved] |
+| 2     | ...                     | ...              | ...    |
 
-## Key Refinements Made
+## Final Proposal Snapshot
+- Canonical clean version lives in `refine-logs/FINAL_PROPOSAL.md`
+- Summarize the final thesis in 3-5 bullets here
 
-1. [Most impactful change + reasoning]
-2. [Second most impactful change + reasoning]
-3. ...
+## Method Evolution Highlights
+1. [Most important simplification or focusing move]
+2. [Most important mechanism upgrade]
+3. [Most important modernization or justification for staying simple]
 
-## Pushback Log
-
+## Pushback / Drift Log
 | Round | Reviewer Said | Author Response | Outcome |
 |-------|---------------|-----------------|---------|
-| 1     | [criticism]   | [pushback + evidence] | [accepted/rejected by reviewer] |
-| ...   | ...           | ...             | ...     |
+| 1     | [criticism]   | [pushback + anchor / evidence] | [accepted / rejected] |
 
 ## Remaining Weaknesses
-
-[Issues not fully resolved — honest assessment]
+[Honest unresolved issues]
 
 ## Raw Reviewer Responses
 
@@ -343,75 +580,83 @@ Save to `refine-logs/REFINEMENT_REPORT.md`:
 
 </details>
 
-<details>
-<summary>Round 2 Review</summary>
-
-[Full verbatim response from GPT-5.4]
-
-</details>
-
 ...
 
 ## Next Steps
-
-- If READY: proceed to implementation → `/run-experiment` → `/auto-review-loop`
-- If REVISE: address remaining weaknesses manually, then re-run `/research-refine`
-- If RETHINK: reconsider the fundamental approach, possibly re-run `/idea-creator`
+- If READY: proceed to `/experiment-plan` for a full experiment roadmap, then `/run-experiment`
+- If REVISE: manually address the remaining mechanism weaknesses, then re-run `/research-refine`
+- If RETHINK: revisit the core mechanism, possibly with `/idea-creator`
 ```
 
-#### Step 5.2: Finalize score-history.md
+#### Step 5.4: Finalize `score-history.md`
 
-Ensure `refine-logs/score-history.md` contains the complete score evolution table.
+Ensure it contains the complete score evolution table using the new dimensions.
 
-#### Step 5.3: Present Summary to User
+#### Step 5.5: Present a Brief Summary to the User
 
 ```
-📋 Refinement complete after N rounds.
+Refinement complete after N rounds.
 
-Final score: X/10 (Verdict: READY/REVISE/RETHINK)
+Final score: X/10 (Verdict: READY / REVISE / RETHINK)
 
-Score evolution:
-  Round 1: X/10 → Round 2: Y/10 → ... → Round N: Z/10
+Anchor status:
+- [preserved / drift corrected / unresolved concern]
 
-Key improvements:
-- [biggest change 1]
-- [biggest change 2]
+Focus status:
+- [tight / slightly broad / still diffuse]
+
+Modernity status:
+- [appropriately frontier-aware / intentionally conservative / still old-school]
+
+Key method upgrades:
+- [method change 1]
+- [method change 2]
 
 Remaining concerns:
 - [if any]
 
+Review summary: refine-logs/REVIEW_SUMMARY.md
 Full report: refine-logs/REFINEMENT_REPORT.md
-Final proposal: refine-logs/round-N-refinement.md
+Final proposal: refine-logs/FINAL_PROPOSAL.md
+Suggested next step: /experiment-plan
 ```
 
 ## Key Rules
 
-- **ALWAYS use `config: {"model_reasoning_effort": "xhigh"}`** for all Codex calls — maximum reasoning depth for plan-level review.
-- **Save threadId from Phase 2**, use `mcp__codex__codex-reply` for all subsequent rounds (Phase 4). Do NOT create a new thread per round.
-- **Full proposal re-sent every round** — GPT cannot read files. Always paste the complete revised proposal in the prompt, not just a diff.
-- **Pushback is encouraged.** Do NOT blindly accept all reviewer feedback. Use local paper evidence to disagree when the reviewer is wrong. This makes the loop more robust than one-directional compliance.
-- **Per-round files, not a single log.** Save each review and refinement as a separate file in `refine-logs/` for easy diffing and tracking.
-- **Threshold 7, not 6.** A plan rated 6/10 isn't worth implementing — the bar must be higher than for a finished paper review because the plan still needs to survive implementation and full review.
-- **Do NOT fabricate results.** The proposal should describe *expected* results and *planned* experiments, not claim results that don't exist yet.
-- **Be specific about compute.** Vague "we'll train a model" is not a plan. Specify GPU-hours, dataset sizes, training iterations.
-- **Baselines are non-negotiable.** Every proposal must include at least 2-3 strong, relevant baselines. "We compare against random" is not acceptable.
-- **Document everything.** Every round's raw review, every change made, every pushback. The refinement log should be a complete record of the plan's evolution.
+- **Anchor first, every round.** Always carry forward the same Problem Anchor.
+- **One paper, one dominant contribution.** Avoid multiple parallel contributions unless the paper truly needs them.
+- **The smallest adequate mechanism wins.** Bigger is not automatically better.
+- **Prefer reuse over invention.** Start from strong existing backbones and add only what the bottleneck requires.
+- **Modern techniques are a prior, not a decoration.** Use LLM / VLM / Diffusion / RL-era components when they sharpen the method, not when they only make the proposal sound trendy.
+- **Minimal experiments.** Inside this skill, experiments only need to prove the core claims.
+- **Review the mechanism, not the parts count.** A long module list is not novelty.
+- **Pushback is encouraged.** If reviewer feedback causes drift or unnecessary complexity, argue back with evidence.
+- **ALWAYS use `config: {"model_reasoning_effort": "xhigh"}`** for all Codex review calls.
+- **Save `threadId` from Phase 2** and use `mcp__codex__codex-reply` for later rounds.
+- **Do not fabricate results.** Only describe expected evidence and planned experiments.
+- **Be specific about compute and data assumptions.** Vague "we'll train a model" is not enough.
+- **Document everything.** Save every raw review, every anchor check, every simplicity check, and every major method change.
 
 ## Composing with Other Skills
 
-This skill sits between idea discovery and implementation in the research pipeline:
+This skill sits between idea discovery and execution:
 
 ```
-/idea-creator "direction"       → ranked ideas with pilot results
-/research-refine "PROBLEM: ... | APPROACH: ..."  ← you are here
-/run-experiment                 → deploy full-scale experiments
-/auto-review-loop               → iterate on results until submission-ready
+/research-refine-pipeline              -> one-shot refine + experiment planning
+/idea-creator "direction"       -> candidate ideas
+/research-refine "PROBLEM: ... | APPROACH: ..."  <- you are here
+/experiment-plan                -> detailed experiment roadmap
+/run-experiment                 -> execute the chosen method
+/auto-review-loop               -> iterate on results and paper
 ```
 
-**Typical flow:**
-1. `/idea-creator` produces a top idea with a positive pilot signal
-2. `/research-refine` takes that idea and turns the vague plan into a concrete, reviewable proposal
-3. Implementation begins based on the refined proposal
-4. `/auto-review-loop` iterates on the actual paper + results
+Typical flow:
 
-**Can also be used standalone:** If you already have a problem and approach (e.g., from reading papers or from a collaborator's suggestion), invoke directly without running `/idea-creator` first.
+1. `/idea-creator` or local reading gives you a problem and a vague method direction
+2. `/research-refine` turns that into an anchored, elegant, frontier-aware method plan
+3. `/experiment-plan` turns the final proposal into a detailed claim-driven experiment roadmap
+4. `/research-refine-pipeline` is the one-shot wrapper when the user wants both stages in a single request
+5. `/run-experiment` executes the chosen runs
+6. Later loops operate on results, not just ideas
+
+This skill also works standalone if you already know the problem and just need the method to become concrete.

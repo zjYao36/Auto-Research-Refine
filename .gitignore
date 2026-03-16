@@ -1,5 +1,17 @@
 .DS_Store
 
+# Local-only working directories
+my_skill/
+old-version-result/
+
+# Common local tooling
+.vscode/
+.idea/
+__pycache__/
+.pytest_cache/
+.venv/
+venv/
+
 papers/*
 !papers/.gitkeep
 

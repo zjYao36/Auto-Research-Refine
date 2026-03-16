@@ -1,4 +1,5 @@
+---
 interface:
   display_name: "Research Refine"
-  short_description: "Turn vague research ideas into clear plans"
-  default_prompt: "Use $research-refine to turn this research problem and rough approach into a concrete research plan: [problem + initial approach]."
+  short_description: "Turn rough ideas into elegant, frontier-aware method plans"
+  default_prompt: "Use $research-refine to turn this research problem and rough approach into a concrete, elegant, frontier-aware research plan that stays focused and avoids unnecessary complexity: [problem + initial approach]."
